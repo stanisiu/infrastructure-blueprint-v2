@@ -33,7 +33,7 @@ locals {
   # IP 대역(CIDR) 하드코딩 제거 및 중앙 관리
   vnet_cidr         = "10.0.0.0/16"
   app_subnet_cidr   = "10.0.1.0/24"
-  # 👉 [수정됨] IP 대역 겹침 에러 해결을 위해 10.0.8.0/22로 변경 (10.0.8.0 ~ 10.0.11.255)
+  # IP 대역 겹침 에러 해결을 위해 10.0.8.0/22로 변경 (10.0.8.0 ~ 10.0.11.255)
   aks_subnet_cidr   = "10.0.8.0/22" 
   fw_subnet_cidr    = "10.0.3.0/24"
   dns_subnet_cidr   = "10.0.4.0/28"
@@ -41,7 +41,7 @@ locals {
 }
 
 # =====================================================
-# 2. 진단 로깅 및 Network Watcher
+# 2. 진단 로깅
 # =====================================================
 resource "azurerm_log_analytics_workspace" "law" {
   name                = "law-vpn-diagnostics"
@@ -50,32 +50,6 @@ resource "azurerm_log_analytics_workspace" "law" {
   sku                 = "PerGB2018"
   retention_in_days   = 30
   tags                = var.tags
-}
-
-data "azurerm_network_watcher" "existing_nw" {
-  count               = var.manage_network_watcher ? 0 : 1
-  name                = "NetworkWatcher_${local.safe_location_no_spaces}"
-  resource_group_name = "NetworkWatcherRG"
-}
-
-resource "azurerm_resource_group" "nw_rg" {
-  count    = var.manage_network_watcher ? 1 : 0
-  name     = "rg-networkwatcher-${local.safe_location_no_spaces}"
-  location = local.safe_location
-  tags     = var.tags
-}
-
-resource "azurerm_network_watcher" "nw" {
-  count               = var.manage_network_watcher ? 1 : 0
-  name                = "nw-${local.safe_location_no_spaces}"
-  location            = local.safe_location
-  resource_group_name = azurerm_resource_group.nw_rg[0].name
-  tags                = var.tags
-}
-
-locals {
-  nw_name = var.manage_network_watcher ? azurerm_network_watcher.nw[0].name : data.azurerm_network_watcher.existing_nw[0].name
-  nw_rg   = var.manage_network_watcher ? azurerm_resource_group.nw_rg[0].name : data.azurerm_network_watcher.existing_nw[0].resource_group_name
 }
 
 # =====================================================
