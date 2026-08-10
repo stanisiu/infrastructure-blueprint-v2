@@ -15,12 +15,6 @@ terraform {
       version = "~> 1.13.0"
     }
   }
-  backend "azurerm" {
-    resource_group_name  = "미리_생성해둔_스토리지_리소스그룹명"
-    storage_account_name = "미리_생성해둔_스토리지_계정명"
-    container_name       = "tfstate"
-    key                  = "network/terraform.tfstate"
-  }
 }
 
 provider "azurerm" {
