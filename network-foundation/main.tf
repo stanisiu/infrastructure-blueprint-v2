@@ -27,8 +27,8 @@ provider "azurerm" {
 data "azurerm_resource_group" "vpn_rg" { name = var.workload_rg_name }
 
 locals {
-  safe_location           = "eastus"
-  safe_location_no_spaces = "eastus"
+  safe_location           = "koreacentral"
+  safe_location_no_spaces = "koreacentral"
 
   # IP 대역(CIDR) 하드코딩 제거 및 중앙 관리
   vnet_cidr         = "10.0.0.0/16"
