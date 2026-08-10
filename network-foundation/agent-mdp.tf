@@ -2,14 +2,12 @@
 # 1. Dev Center 및 Project 프로비저닝 (MDP 필수 종속성)
 # =====================================================
 resource "azurerm_dev_center" "dc" {
-  # 👉 [수정됨] 찌꺼기 충돌(409)을 피하기 위해 이름에 -v2 추가
   name                = "dc-core-network-v2"
   resource_group_name = data.azurerm_resource_group.vpn_rg.name
   location            = local.safe_location
 }
 
 resource "azurerm_dev_center_project" "dcp" {
-  # 👉 [수정됨] Project 이름에도 동일하게 -v2 추가
   name                = "dcp-core-network-v2"
   resource_group_name = data.azurerm_resource_group.vpn_rg.name
   location            = local.safe_location
@@ -20,8 +18,8 @@ resource "azurerm_dev_center_project" "dcp" {
 # Managed DevOps Pool을 위한 User-Assigned Managed Identity
 # =====================================================
 resource "azurerm_user_assigned_identity" "devops_mi" {
-  name                = "id-mdp-agent-v2-${local.nw_name}"
-  resource_group_name = local.nw_rg
+  name                = "id-mdp-agent-v2-${local.safe_location_no_spaces}"
+  resource_group_name = data.azurerm_resource_group.vpn_rg.name
   location            = local.safe_location
 }
 
@@ -83,7 +81,6 @@ resource "azapi_resource" "devops_pool" {
 
   tags = var.tags
 
-  # 👉 권한 부여 블록을 제거하고 Dev Center 순서만 보장
   depends_on = [
     azurerm_dev_center_project.dcp
   ]
