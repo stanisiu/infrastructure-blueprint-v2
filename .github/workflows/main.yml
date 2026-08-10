@@ -29,4 +29,4 @@ jobs:
         run: terraform init
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var="ado_url=https://dev.azure.com/20200509"
+        run: terraform apply -auto-approve -var="ado_url=https://dev.azure.com/20200509" -var="key_vault_id=dummy-key-vault-id"
