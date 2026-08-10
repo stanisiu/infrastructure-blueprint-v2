@@ -26,11 +26,6 @@ provider "azurerm" {
 # =====================================================
 data "azurerm_resource_group" "vpn_rg" { name = var.workload_rg_name }
 
-data "azurerm_key_vault_secret" "vpn_psk" {
-  name         = "vpn-ipsec-shared-key"
-  key_vault_id = var.key_vault_id
-}
-
 locals {
   safe_location           = data.azurerm_resource_group.vpn_rg.location
   safe_location_no_spaces = replace(lower(local.safe_location), " ", "")
@@ -192,15 +187,6 @@ resource "azurerm_virtual_network_gateway" "vng" {
   tags = var.tags
 }
 
-# 👉 [수정됨] 권한 부족(403 Forbidden) 에러로 인해 주석 처리
-# resource "azurerm_management_lock" "vng_lock" {
-#   count      = var.enable_delete_locks ? 1 : 0
-#   name       = "lock-vng-core-vpn"
-#   scope      = azurerm_virtual_network_gateway.vng.id
-#   lock_level = "CanNotDelete"
-#   notes      = "운영 환경 VPN 게이트웨이 수동 삭제 방지"
-# }
-
 resource "azurerm_local_network_gateway" "onprem_lng" {
   name                = "lng-onprem-datacenter"
   location            = local.safe_location
@@ -214,15 +200,6 @@ resource "azurerm_local_network_gateway" "onprem_lng" {
   tags = var.tags
 }
 
-# 👉 [수정됨] 권한 부족(403 Forbidden) 에러로 인해 주석 처리
-# resource "azurerm_management_lock" "lng_lock" {
-#   count      = var.enable_delete_locks ? 1 : 0
-#   name       = "lock-lng-onprem-datacenter"
-#   scope      = azurerm_local_network_gateway.onprem_lng.id
-#   lock_level = "CanNotDelete"
-#   notes      = "온프레미스 게이트웨이 정의 수동 삭제 방지"
-# }
-
 resource "azurerm_virtual_network_gateway_connection" "vpn_connection" {
   name                       = "conn-azure-to-onprem"
   location                   = local.safe_location
@@ -230,7 +207,9 @@ resource "azurerm_virtual_network_gateway_connection" "vpn_connection" {
   type                       = "IPsec"
   virtual_network_gateway_id = azurerm_virtual_network_gateway.vng.id
   local_network_gateway_id   = azurerm_local_network_gateway.onprem_lng.id
-  shared_key                 = data.azurerm_key_vault_secret.vpn_psk.value
+  
+  shared_key                 = "MyTemporarySecretKey123!"
+  
   ipsec_policy {
     dh_group         = "DHGroup14"
     ike_encryption   = "AES256"
@@ -310,29 +289,6 @@ resource "azurerm_storage_account" "flowlog_sa" {
   }
   tags = var.tags
 }
-
-# 👉 [수정됨] Azure 정책 변경(Flow Log 생성 지원 종료)으로 인해 주석 처리
-# resource "azurerm_network_watcher_flow_log" "app_nsg_flow_log" {
-#   name                      = "flowlog-app-nsg"
-#   network_watcher_name      = local.nw_name
-#   resource_group_name       = local.nw_rg
-#   target_resource_id        = azurerm_network_security_group.app_nsg.id
-#   storage_account_id        = azurerm_storage_account.flowlog_sa.id
-#   enabled                   = true
-#   
-#   retention_policy { 
-#     enabled = true 
-#     days    = 30 
-#   }
-#   
-#   traffic_analytics {
-#     enabled               = true
-#     workspace_id          = azurerm_log_analytics_workspace.law.workspace_id
-#     workspace_region      = azurerm_log_analytics_workspace.law.location
-#     workspace_resource_id = azurerm_log_analytics_workspace.law.id
-#     interval_in_minutes   = 10
-#   }
-# }
 
 # =====================================================
 # 6. DNS Private Resolver (온프레미스 연동용)
@@ -503,31 +459,4 @@ resource "azurerm_firewall_application_rule_collection" "aks_required_app" {
       type = "Https"
     }
   }
-}
-
-# =====================================================
-# 9. Managed DevOps Pool (MDP) VNet Injection RBAC 권한 할당
-# =====================================================
-
-# 테넌트에 자동으로 생성되어 있는 DevOpsInfrastructure 서비스 주체(엔터프라이즈 앱)를 가져옵니다.
-data "azuread_service_principal" "mdp_sp" {
-  display_name = "DevOpsInfrastructure"
-}
-
-# MDP 프로비저닝 백엔드 유효성 검사 통과를 위한 Reader 권한 할당 (필수)
-resource "azurerm_role_assignment" "mdp_vnet_reader" {
-  scope                = azurerm_virtual_network.main_vnet.id
-  role_definition_name = "Reader"
-  principal_id         = data.azuread_service_principal.mdp_sp.object_id
-}
-
-# MDP 에이전트 주입 및 네트워크 관리를 위한 Network Contributor 권한 할당 (필수)
-resource "azurerm_role_assignment" "mdp_vnet_contributor" {
-  scope                = azurerm_virtual_network.main_vnet.id
-  role_definition_name = "Network Contributor"
-  principal_id         = data.azuread_service_principal.mdp_sp.object_id
-  
-  depends_on = [
-    azurerm_role_assignment.mdp_vnet_reader
-  ]
 }
