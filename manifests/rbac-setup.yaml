@@ -1,0 +1,25 @@
+# 예: infra/kubernetes-admin/rbac-setup.yaml 새로 생성
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: workload-app
+  name: pipeline-deployer-role
+rules:
+- apiGroups: ["", "apps", "extensions"]
+  resources: ["pods", "services", "deployments", "statefulsets", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: pipeline-deployer-binding
+  namespace: workload-app
+subjects:
+- kind: User
+  # 앱 배포 파이프라인 Service Connection의 Entra ID Object ID를 입력
+  name: "<APP_PIPELINE_SP_OBJECT_ID>" 
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: pipeline-deployer-role
+  apiGroup: rbac.authorization.k8s.io

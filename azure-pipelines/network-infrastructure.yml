@@ -1,0 +1,103 @@
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - network-foundation/*
+    - azure-pipelines/*
+
+variables:
+  azureServiceConnection: 'sc-enterprise-prod'
+  terraformWorkingDirectory: '$(System.DefaultWorkingDirectory)/network-foundation'
+  tfstateResourceGroup: 'rg-terraform-state-prod'
+  tfstateStorageAccount: 'sttfstateprod26370'
+  tfstateContainer: 'tfstate'
+  tfstateKey: 'vpn-sec-network.terraform.tfstate'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: TerraformPlan
+  displayName: 'Terraform 검증 및 계획 (Plan)'
+  jobs:
+  - job: Plan
+    displayName: 'Terraform Plan'
+    steps:
+    - checkout: self
+
+    - task: TerraformInstaller@1
+      inputs: 
+        terraformVersion: '1.5.7'
+        
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(terraformWorkingDirectory)'
+        backendServiceArm: '$(azureServiceConnection)'
+        backendAzureRmResourceGroupName: '$(tfstateResourceGroup)'
+        backendAzureRmStorageAccountName: '$(tfstateStorageAccount)'
+        backendAzureRmContainerName: '$(tfstateContainer)'
+        backendAzureRmKey: '$(tfstateKey)'
+
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(terraformWorkingDirectory)'
+        environmentServiceNameAzureRM: '$(azureServiceConnection)'
+        # ==============================================================
+        # [완성본] 3개의 변수가 모두 포함되었습니다!
+        # ==============================================================
+        commandOptions: '-out=tfplan -var="ado_url=https://dev.azure.com/Stani-devops-org" -var="key_vault_id=/subscriptions/5df9d2ab-f232-4a36-8e8e-63998eaf120a/resourceGroups/rg-terraform-state-prod/providers/Microsoft.KeyVault/vaults/kv-ent-sec-sh0728" -var="onprem_gateway_ip=1.1.1.1"'
+
+    - publish: '$(terraformWorkingDirectory)/tfplan'
+      artifact: 'network-tfplan-artifact'
+      displayName: 'Publish tfplan artifact'
+
+- stage: TerraformApply
+  displayName: 'Terraform 실제 배포 (Apply)'
+  dependsOn: TerraformPlan
+  condition: succeeded('TerraformPlan')
+  jobs:
+  - deployment: Apply
+    displayName: 'Terraform Apply'
+    environment: 'production' 
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            inputs: 
+              terraformVersion: '1.5.7'
+
+          - download: current
+            artifact: 'network-tfplan-artifact'
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(terraformWorkingDirectory)'
+              backendServiceArm: '$(azureServiceConnection)'
+              backendAzureRmResourceGroupName: '$(tfstateResourceGroup)'
+              backendAzureRmStorageAccountName: '$(tfstateStorageAccount)'
+              backendAzureRmContainerName: '$(tfstateContainer)'
+              backendAzureRmKey: '$(tfstateKey)'
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Apply (From Artifact)'
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              workingDirectory: '$(terraformWorkingDirectory)'
+              # 👉 [핵심 수정] 다운로드된 아티팩트의 정확한 위치를 절대 경로로 지정합니다!
+              commandOptions: '$(Pipeline.Workspace)/network-tfplan-artifact/tfplan'
+              environmentServiceNameAzureRM: '$(azureServiceConnection)'

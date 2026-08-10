@@ -1,0 +1,213 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: workload-app
+  labels:
+    environment: production
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: azure-kv-secrets
+  namespace: workload-app
+spec:
+  provider: azure
+  secretObjects:
+  - secretName: azure-kv-secret-store # Pod들이 환경변수로 참조할 Secret 이름
+    type: Opaque
+    data:
+    - objectName: "db-root-password"  # Key Vault에 저장된 Secret 이름
+      key: "db-root-password"         # 컨테이너 안에서 참조할 Key 이름
+  parameters:
+    usePodIdentity: "false"
+    useVMManagedIdentity: "false"
+    # =====================================================
+    # [수정됨] 하드코딩된 clientID 및 tenantId 제거
+    # ServiceAccount의 Workload Identity 어노테이션을 통해 
+    # CSI 드라이버가 런타임에 동적으로 자격 증명을 획득합니다.
+    # =====================================================
+    keyvaultName: "<YOUR_KEYVAULT_NAME>" # 환경에 맞게 주입
+    cloudName: ""
+    objects: |
+      array:
+        - objectName: "db-root-password"
+          objectType: "secret"
+          objectVersion: ""
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-workload-sa
+  namespace: workload-app
+  annotations:
+    # 이 어노테이션이 OIDC 인증의 핵심 역할을 수행합니다.
+    azure.workload.identity/client-id: "<USER_ASSIGNED_IDENTITY_CLIENT_ID>"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mariadb-db
+  namespace: workload-app
+spec:
+  serviceName: "mariadb-internal"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: app-workload-sa
+      containers:
+      - name: mariadb
+        image: mariadb:10.11
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: azure-kv-secret-store
+              key: db-root-password
+        - name: MYSQL_DATABASE
+          value: "quant_trading_db"
+        
+        livenessProbe:
+          tcpSocket:
+            port: 3306
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command: ["mysqladmin", "ping", "-h", "localhost"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          
+        volumeMounts:
+        - name: mariadb-data
+          mountPath: /var/lib/mysql
+        - name: secret-volume
+          mountPath: "/mnt/secrets-store"
+          readOnly: true
+
+      volumes:
+      - name: secret-volume
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "azure-kv-secrets"
+
+  # =====================================================
+  # [수정됨] 스토리지 프로토콜 및 접근 모드 재설계
+  # =====================================================
+  volumeClaimTemplates:
+  - metadata:
+      name: mariadb-data
+    spec:
+      # 다중 파드 공유(ReadWriteMany) 제거, 단일 노드 블록 스토리지 접근(ReadWriteOnce)으로 변경
+      accessModes: [ "ReadWriteOnce" ] 
+      # SMB 기반 Azure Files 제거, Premium SSD 기반 Azure Disk로 변경
+      storageClassName: "azuredisk-csi-premium" 
+      resources:
+        requests:
+          storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-internal
+  namespace: workload-app
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+  selector:
+    app: mariadb
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs-api-server
+  namespace: workload-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nodejs-api
+  template:
+    metadata:
+      labels:
+        app: nodejs-api
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: app-workload-sa
+      containers:
+      - name: api-server
+        image: mcr.microsoft.com/oss/nodejs/nodejs:18-alpine
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: DB_HOST
+          value: "mariadb-internal"
+        - name: DB_USER
+          value: "root"
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: azure-kv-secret-store
+              key: db-root-password
+        - name: DB_NAME
+          value: "quant_trading_db"
+          
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+
+        volumeMounts:
+        - name: secret-volume
+          mountPath: "/mnt/secrets-store"
+          readOnly: true
+
+    volumes:
+    - name: secret-volume
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: "azure-kv-secrets"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodejs-api-service
+  namespace: workload-app
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+  selector:
+    app: nodejs-api

@@ -1,0 +1,94 @@
+# .azure-pipelines/network-infrastructure.yml
+
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - network-foundation/*
+
+variables:
+  azureServiceConnection: 'sc-enterprise-prod'
+  terraformWorkingDirectory: '$(System.DefaultWorkingDirectory)/network-foundation'
+  tfstateResourceGroup: 'rg-terraform-state-prod'
+  tfstateStorageAccount: 'sttfstateprod123'
+  tfstateContainer: 'tfstate'
+  tfstateKey: 'vpn-sec-network.terraform.tfstate'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: TerraformPlan
+  displayName: 'Terraform 검증 및 계획 (Plan)'
+  jobs:
+  - job: Plan
+    displayName: 'Terraform Plan'
+    steps:
+    - task: TerraformInstaller@1
+      inputs: { terraformVersion: 'latest' }
+        
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(terraformWorkingDirectory)'
+        backendServiceArm: '$(azureServiceConnection)'
+        backendAzureRmResourceGroupName: '$(tfstateResourceGroup)'
+        backendAzureRmStorageAccountName: '$(tfstateStorageAccount)'
+        backendAzureRmContainerName: '$(tfstateContainer)'
+        backendAzureRmKey: '$(tfstateKey)'
+
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(terraformWorkingDirectory)'
+        environmentServiceNameAzureRM: '$(azureServiceConnection)'
+        commandOptions: '-out=tfplan' 
+
+    - publish: '$(terraformWorkingDirectory)/tfplan'
+      artifact: 'network-tfplan-artifact'
+
+- stage: TerraformApply
+  displayName: 'Terraform 실제 배포 (Apply)'
+  dependsOn: TerraformPlan
+  condition: succeeded('TerraformPlan')
+  jobs:
+  - deployment: Apply
+    displayName: 'Terraform Apply'
+    environment: 'production' 
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: TerraformInstaller@1
+            inputs: { terraformVersion: 'latest' }
+
+          - download: current
+            artifact: 'network-tfplan-artifact'
+            pathtoDownload: '$(terraformWorkingDirectory)'
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(terraformWorkingDirectory)'
+              backendServiceArm: '$(azureServiceConnection)'
+              backendAzureRmResourceGroupName: '$(tfstateResourceGroup)'
+              backendAzureRmStorageAccountName: '$(tfstateStorageAccount)'
+              backendAzureRmContainerName: '$(tfstateContainer)'
+              backendAzureRmKey: '$(tfstateKey)'
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Apply (From Artifact)'
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              workingDirectory: '$(terraformWorkingDirectory)'
+              commandOptions: 'tfplan'
+              environmentServiceNameAzureRM: '$(azureServiceConnection)'
