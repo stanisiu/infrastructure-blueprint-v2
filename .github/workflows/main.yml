@@ -9,6 +9,10 @@ jobs:
     name: "Terraform Apply"
     runs-on: ubuntu-latest
     
+    defaults:
+      run:
+        working-directory: ./network-foundation
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
