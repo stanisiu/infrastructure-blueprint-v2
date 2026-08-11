@@ -63,7 +63,8 @@ resource "azapi_resource" "devops_pool" {
       fabricProfile = {
         kind = "Vmss"
         sku = {
-          name = "Standard_D2ds_v5" 
+          # 👇 학생 구독 할당량 제한을 피하기 위한 SKU 사이즈 하향 조정 👇
+          name = "Standard_D2s_v3" 
         }
         images = [
           {
