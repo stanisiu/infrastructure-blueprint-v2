@@ -47,3 +47,13 @@ output "devops_agent_principal_id" {
   # JSON 형태로 값을 반환하도록 구성되어 있다면 아래 주석 처리된 방식을 사용해야 함.
   # value     = jsondecode(azapi_resource.devops_pool.output).identity.principalId
 }
+
+output "current_subscription_id" {
+  description = "현재 연결된 Azure 구독 ID"
+  value       = data.azurerm_client_config.current.subscription_id
+}
+
+output "current_client_id" {
+  description = "현재 연결된 서비스 주체(앱) ID"
+  value       = data.azurerm_client_config.current.client_id
+}
