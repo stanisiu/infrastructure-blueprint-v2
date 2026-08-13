@@ -435,4 +435,9 @@ resource "azurerm_firewall_application_rule_collection" "aks_required_app" {
       type = "Https"
     }
   }
+  
+  # 방화벽 규칙 충돌(409) 방지를 위한 순서 강제 옵션
+  depends_on = [
+    azurerm_firewall_network_rule_collection.aks_required_net
+  ]
 }
