@@ -24,6 +24,20 @@ resource "azurerm_user_assigned_identity" "devops_mi" {
 }
 
 # =====================================================
+# DevOpsInfrastructure 서비스 주체에 권한 부여
+# =====================================================
+data "azuread_service_principal" "devops_infra_sp" {
+  display_name = "DevOpsInfrastructure"
+}
+
+resource "azurerm_role_assignment" "devops_vnet_contributor" {
+  # 리소스 그룹 레벨에서 네트워크 참가자 권한을 부여하여 VNet 접근 허용
+  scope                = data.azurerm_resource_group.vpn_rg.id
+  role_definition_name = "Network Contributor"
+  principal_id         = data.azuread_service_principal.devops_infra_sp.object_id
+}
+
+# =====================================================
 # 2. Managed DevOps Pool 리소스 프로비저닝
 # =====================================================
 resource "azapi_resource" "devops_pool" {
@@ -82,6 +96,7 @@ resource "azapi_resource" "devops_pool" {
   tags = var.tags
 
   depends_on = [
-    azurerm_dev_center_project.dcp
+    azurerm_dev_center_project.dcp,
+    azurerm_role_assignment.devops_vnet_contributor # ★ 이 권한이 부여된 이후에만 풀이 생성되도록 종속성 강제
   ]
 }
