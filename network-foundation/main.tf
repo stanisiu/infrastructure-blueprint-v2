@@ -23,13 +23,13 @@ provider "azurerm" {
 data "azurerm_resource_group" "vpn_rg" { name = var.workload_rg_name }
 
 locals {
-  safe_location           = "japaneast"
-  safe_location_no_spaces = "japaneast"
+  # ★ 리전 통합 및 학생 구독 제한 회피를 위해 koreasouth로 통일
+  safe_location           = "koreasouth"
+  safe_location_no_spaces = "koreasouth"
 
   vnet_cidr         = "10.0.0.0/16"
   app_subnet_cidr   = "10.0.1.0/24"
   aks_subnet_cidr   = "10.0.8.0/22" 
-  fw_subnet_cidr    = "10.0.3.0/24"
   dns_subnet_cidr   = "10.0.4.0/28"
   gw_subnet_cidr    = "10.0.254.0/27"
 }
@@ -103,7 +103,7 @@ resource "azurerm_subnet" "dns_resolver_subnet" {
 }
 
 # =====================================================
-# 4. VPN 게이트웨이 및 연결
+# 4. VPN 게이트웨이 및 연결 (Active-Active 비활성화로 IP 절약)
 # =====================================================
 resource "azurerm_public_ip" "vng_pip" {
   name                = "pip-vpn-gateway-1"
@@ -111,18 +111,6 @@ resource "azurerm_public_ip" "vng_pip" {
   resource_group_name = data.azurerm_resource_group.vpn_rg.name
   allocation_method   = "Static"
   sku                 = "Standard"
-  zones               = ["1", "2", "3"]
-  tags                = var.tags
-}
-
-resource "azurerm_public_ip" "vng_pip_2" {
-  count               = var.enable_active_active ? 1 : 0
-  name                = "pip-vpn-gateway-2"
-  location            = local.safe_location
-  resource_group_name = data.azurerm_resource_group.vpn_rg.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  zones               = ["1", "2", "3"]
   tags                = var.tags
 }
 
@@ -132,9 +120,9 @@ resource "azurerm_virtual_network_gateway" "vng" {
   resource_group_name = data.azurerm_resource_group.vpn_rg.name
   type                = "Vpn"
   vpn_type            = "RouteBased"
-  sku                 = "VpnGw1AZ"
+  sku                 = "VpnGw1"
   generation          = "Generation1"
-  active_active       = var.enable_active_active
+  active_active       = false
   
   bgp_settings { asn = var.azure_bgp_asn }
   
@@ -145,15 +133,6 @@ resource "azurerm_virtual_network_gateway" "vng" {
     subnet_id                     = azurerm_subnet.gateway_subnet.id
   }
   
-  dynamic "ip_configuration" {
-    for_each = var.enable_active_active ? [1] : []
-    content {
-      name                          = "vng-ip-config-2"
-      public_ip_address_id          = azurerm_public_ip.vng_pip_2[0].id
-      private_ip_address_allocation = "Dynamic"
-      subnet_id                     = azurerm_subnet.gateway_subnet.id
-    }
-  }
   tags = var.tags
 }
 
@@ -284,166 +263,7 @@ resource "azurerm_private_dns_resolver_inbound_endpoint" "inbound" {
 }
 
 # =====================================================
-# 7. 아웃바운드(Egress) 중앙 통제: Azure Firewall 및 UDR
-# =====================================================
-resource "azurerm_subnet" "fw_subnet" {
-  name                 = "AzureFirewallSubnet"
-  resource_group_name  = data.azurerm_resource_group.vpn_rg.name
-  virtual_network_name = azurerm_virtual_network.main_vnet.name
-  address_prefixes     = [local.fw_subnet_cidr]
-}
-
-resource "azurerm_public_ip" "fw_pip" {
-  name                = "pip-fw-core"
-  location            = local.safe_location
-  resource_group_name = data.azurerm_resource_group.vpn_rg.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  sku_tier            = "Regional"
-  tags                = var.tags
-}
-
-resource "azurerm_firewall" "fw" {
-  name                = "fw-core-network"
-  location            = local.safe_location
-  resource_group_name = data.azurerm_resource_group.vpn_rg.name
-  sku_name            = "AZFW_VNet"
-  sku_tier            = "Standard" 
-
-  ip_configuration {
-    name                 = "fw-ip-config"
-    subnet_id            = azurerm_subnet.fw_subnet.id
-    public_ip_address_id = azurerm_public_ip.fw_pip.id
-  }
-  tags = var.tags
-
-  timeouts {
-    create = "60m"
-    update = "60m"
-    delete = "60m"
-  }
-}
-
-resource "azurerm_route_table" "aks_udr" {
-  name                          = "rt-aks-egress"
-  location                      = local.safe_location
-  resource_group_name           = data.azurerm_resource_group.vpn_rg.name
-  bgp_route_propagation_enabled = true
-
-  route {
-    name                   = "Route_To_Firewall"
-    address_prefix         = "0.0.0.0/0"
-    next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = azurerm_firewall.fw.ip_configuration[0].private_ip_address
-  }
-  tags = var.tags
-}
-
-resource "azurerm_subnet_route_table_association" "aks_udr_assoc" {
-  subnet_id      = azurerm_subnet.aks_subnet.id
-  route_table_id = azurerm_route_table.aks_udr.id
-}
-
-resource "azurerm_subnet_route_table_association" "app_udr_assoc" {
-  subnet_id      = azurerm_subnet.app_subnet.id
-  route_table_id = azurerm_route_table.aks_udr.id
-}
-
-# =====================================================
-# 8. Azure Firewall 필수 허용 규칙
-# =====================================================
-resource "azurerm_firewall_network_rule_collection" "aks_required_net" {
-  name                = "aks-required-network-rules"
-  azure_firewall_name = azurerm_firewall.fw.name
-  resource_group_name = data.azurerm_resource_group.vpn_rg.name
-  priority            = 100
-  action              = "Allow"
-
-  rule {
-    name                  = "Allow_NTP"
-    source_addresses      = [local.vnet_cidr, "100.64.0.0/16"] 
-    destination_ports     = ["123"]
-    destination_addresses = ["*"]
-    protocols             = ["UDP"]
-  }
-
-  rule {
-    name                  = "Allow_Azure_Cloud"
-    source_addresses      = [local.vnet_cidr, "100.64.0.0/16"]
-    destination_ports     = ["443"]
-    destination_addresses = ["AzureCloud"] 
-    protocols             = ["TCP"]
-  }
-}
-
-resource "azurerm_firewall_application_rule_collection" "aks_required_app" {
-  name                = "aks-required-app-rules"
-  azure_firewall_name = azurerm_firewall.fw.name
-  resource_group_name = data.azurerm_resource_group.vpn_rg.name
-  priority            = 100
-  action              = "Allow"
-
-  rule {
-    name             = "Allow_AKS_Core_Dependencies"
-    source_addresses = [local.vnet_cidr, "100.64.0.0/16"]
-    target_fqdns     = [
-      "*.azmk8s.io",
-      "mcr.microsoft.com",
-      "*.data.mcr.microsoft.com",
-      "management.azure.com",
-      "login.microsoftonline.com",
-      "packages.microsoft.com",
-      "acs-mirror.azureedge.net"
-    ]
-    protocol {
-      port = "443"
-      type = "Https"
-    }
-  }
-
-  rule {
-    name             = "Allow_Ubuntu_Updates"
-    source_addresses = [local.vnet_cidr, "100.64.0.0/16"]
-    target_fqdns     = [
-      "security.ubuntu.com",
-      "azure.archive.ubuntu.com",
-      "changelogs.ubuntu.com"
-    ]
-    protocol {
-      port = "80"
-      type = "Http"
-    }
-    protocol {
-      port = "443"
-      type = "Https"
-    }
-  }
-
-  rule {
-    name             = "Allow_DevOps_and_GitHub"
-    source_addresses = [local.vnet_cidr, "100.64.0.0/16"]
-    target_fqdns     = [
-      "dev.azure.com",
-      "*.dev.azure.com",
-      "github.com",
-      "*.github.com",
-      "api.github.com",
-      "pypi.org",
-      "files.pythonhosted.org"
-    ]
-    protocol {
-      port = "443"
-      type = "Https"
-    }
-  }
-  
-  depends_on = [
-    azurerm_firewall_network_rule_collection.aks_required_net
-  ]
-}
-
-# =====================================================
-# 9. Dev Center 및 Managed DevOps Pool (네이티브 v4 최종 완성)
+# 7. Dev Center 및 Managed DevOps Pool (쿼타 초과 방지를 위한 D 시리즈 적용)
 # =====================================================
 resource "azurerm_dev_center" "dc" {
   name                = "dc-core-network-v2"
@@ -494,7 +314,8 @@ resource "azurerm_managed_devops_pool" "devops_pool" {
   stateless_agent {}
 
   virtual_machine_scale_set_fabric {
-    sku_name = "Standard_B2s"
+    # B 시리즈 할당량 제한(0)을 우회하기 위해 D 시리즈 표준 스펙 적용
+    sku_name = "Standard_D2s_v3"
     
     image {
       well_known_image_name = "ubuntu-22.04/latest"
