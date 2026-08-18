@@ -10,7 +10,6 @@ terraform {
     azuread = {
       source  = "hashicorp/azuread"
     }
-    # azapi 프로바이더는 네이티브 리소스로 마이그레이션하여 완전 제거.
   }
 }
 
@@ -27,10 +26,8 @@ locals {
   safe_location           = "japaneast"
   safe_location_no_spaces = "japaneast"
 
-  # IP 대역(CIDR) 하드코딩 제거 및 중앙 관리
   vnet_cidr         = "10.0.0.0/16"
   app_subnet_cidr   = "10.0.1.0/24"
-  # IP 대역 겹침 에러 해결을 위해 10.0.8.0/22로 변경 (10.0.8.0 ~ 10.0.11.255)
   aks_subnet_cidr   = "10.0.8.0/22" 
   fw_subnet_cidr    = "10.0.3.0/24"
   dns_subnet_cidr   = "10.0.4.0/28"
@@ -302,10 +299,7 @@ resource "azurerm_public_ip" "fw_pip" {
   resource_group_name = data.azurerm_resource_group.vpn_rg.name
   allocation_method   = "Static"
   sku                 = "Standard"
-  
-  # ★ 방화벽 500 에러 방어: Regional 티어 명시적 바인딩
   sku_tier            = "Regional"
-  
   tags                = var.tags
 }
 
@@ -449,7 +443,7 @@ resource "azurerm_firewall_application_rule_collection" "aks_required_app" {
 }
 
 # =====================================================
-# 9. Dev Center 및 Managed DevOps Pool (subnet_id 위치 정렬 완료)
+# 9. Dev Center 및 Managed DevOps Pool (네이티브 v4 최종 완성)
 # =====================================================
 resource "azurerm_dev_center" "dc" {
   name                = "dc-core-network-v2"
@@ -496,6 +490,8 @@ resource "azurerm_managed_devops_pool" "devops_pool" {
       parallelism = 1
     }
   }
+
+  stateless_agent {}
 
   virtual_machine_scale_set_fabric {
     sku_name = "Standard_B2s"
