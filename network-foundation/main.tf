@@ -1,4 +1,123 @@
 # =====================================================
+# 1. Dev Center 및 Project 프로비저닝 (MDP 필수 종속성)
+# =====================================================
+resource "azurerm_dev_center" "dc" {
+  name                = "dc-core-network-v2"
+  resource_group_name = data.azurerm_resource_group.vpn_rg.name
+  location            = local.safe_location
+}
+
+resource "azurerm_dev_center_project" "dcp" {
+  name                = "dcp-core-network-v2"
+  resource_group_name = data.azurerm_resource_group.vpn_rg.name
+  location            = local.safe_location
+  dev_center_id       = azurerm_dev_center.dc.id
+}
+
+# =====================================================
+# Managed DevOps Pool을 위한 User-Assigned Managed Identity
+# =====================================================
+resource "azurerm_user_assigned_identity" "devops_mi" {
+  name                = "id-mdp-agent-v2-${local.safe_location_no_spaces}"
+  resource_group_name = data.azurerm_resource_group.vpn_rg.name
+  location            = local.safe_location
+}
+
+# =====================================================
+# DevOpsInfrastructure 서비스 주체에 권한 부여 (수동 하드코딩 우회 방식)
+# =====================================================
+# 학교 계정 권한 에러(403)를 피하기 위해 동적 검색을 주석 처리.
+# data "azuread_service_principal" "devops_infra_sp" {
+#   display_name = "DevOpsInfrastructure"
+# }
+
+resource "azurerm_role_assignment" "devops_vnet_contributor" {
+  # 리소스 그룹 레벨에서 네트워크 참가자 권한을 부여하여 VNet 접근 허용
+  scope                = data.azurerm_resource_group.vpn_rg.id
+  role_definition_name = "Network Contributor"
+  
+  principal_id         = "6854130e-96f3-4483-867b-2a9d45dfac2e"
+}
+
+# ★ [핵심 1] 명시적 지연 로직 추가: 권한이 Azure 백엔드 전역에 동기화될 때까지 60초 대기
+resource "time_sleep" "wait_for_rbac_propagation" {
+  depends_on      = [azurerm_role_assignment.devops_vnet_contributor]
+  create_duration = "60s"
+}
+
+# =====================================================
+# 2. Managed DevOps Pool 리소스 프로비저닝
+# =====================================================
+resource "azapi_resource" "devops_pool" {
+  type      = "Microsoft.DevOpsInfrastructure/pools@2024-04-04-preview"
+  name      = "mdp-private-pool"
+  location  = local.safe_location
+  parent_id = data.azurerm_resource_group.vpn_rg.id
+
+  schema_validation_enabled = false
+
+  body = jsonencode({
+    identity = {
+      type = "UserAssigned"
+      userAssignedIdentities = {
+        "${azurerm_user_assigned_identity.devops_mi.id}" = {}
+      }
+    }
+    properties = {
+      devCenterProjectResourceId = azurerm_dev_center_project.dcp.id
+      
+      organizationProfile = {
+        kind = "AzureDevOps"
+        organizations = [
+          {
+            url      = var.ado_url
+            projects = [] 
+          }
+        ]
+        permissionProfile = {
+          kind = "Inherited"
+        }
+      }
+      
+      agentProfile = {
+        kind = "Stateless"
+      }
+      fabricProfile = {
+        kind = "Vmss"
+        sku = {
+          name = "Standard_B2s" 
+        }
+        images = [
+          {
+            wellKnownImageName = "ubuntu-22.04/latest"
+          }
+        ]
+        networkProfile = {
+          subnetId = azurerm_subnet.app_subnet.id
+        }
+      }
+      
+      maximumConcurrency = 1
+    }
+  })
+
+  tags = var.tags
+
+  # ★ [핵심 2] 상태 무시(Drift 무시): 백엔드 자동 주입값으로 인한 오류 및 업데이트 루프 방지
+  lifecycle {
+    ignore_changes = [
+      tags,
+      body
+    ]
+  }
+
+  depends_on = [
+    azurerm_dev_center_project.dcp,
+    time_sleep.wait_for_rbac_propagation # ★ 수정: 대기 로직이 완전히 끝난 후 MDP 생성 시작
+  ]
+}
+
+# =====================================================
 # 0. 테라폼 프로바이더 및 버전 설정 (v4.0.0 이상 완벽 호환)
 # =====================================================
 terraform {
@@ -321,6 +440,13 @@ resource "azurerm_firewall" "fw" {
     public_ip_address_id = azurerm_public_ip.fw_pip.id
   }
   tags = var.tags
+
+  # 타임아웃 방어: 방화벽 생성 시 Azure 서버 부하로 인한 500 에러를 방지하기 위해 대기 시간 대폭 연장
+  timeouts {
+    create = "60m"
+    update = "60m"
+    delete = "60m"
+  }
 }
 
 resource "azurerm_route_table" "aks_udr" {
