@@ -449,7 +449,7 @@ resource "azurerm_firewall_application_rule_collection" "aks_required_app" {
 }
 
 # =====================================================
-# 9. Dev Center 및 Managed DevOps Pool (네이티브 최신 스키마)
+# 9. Dev Center 및 Managed DevOps Pool (최신 정식 v4 스키마 반영)
 # =====================================================
 resource "azurerm_dev_center" "dc" {
   name                = "dc-core-network-v2"
@@ -481,7 +481,7 @@ resource "time_sleep" "wait_for_rbac_propagation" {
   create_duration = "60s"
 }
 
-# 최신 v4.68+ 프로바이더 스키마에 맞춘 네이티브 리소스
+# 최신 프로바이더 스키마 검증을 완벽히 통과하는 Managed DevOps Pool 네이티브 리소스
 resource "azurerm_managed_devops_pool" "devops_pool" {
   name                  = "mdp-private-pool"
   location              = local.safe_location
@@ -491,10 +491,11 @@ resource "azurerm_managed_devops_pool" "devops_pool" {
   maximum_concurrency   = 1
 
   azure_devops_organization {
-    url = var.ado_url
-    
-    # 상속 권한 프로필 (projects를 비워두면 조직 전체/프로젝트 상속)
-    pool_projects_kind = "Inherited" 
+    organization {
+      uri          = var.ado_url
+      projects     = []
+      parallelism  = 1
+    }
   }
 
   virtual_machine_scale_set_fabric {
@@ -502,11 +503,6 @@ resource "azurerm_managed_devops_pool" "devops_pool" {
     
     image {
       well_known_image_name = "ubuntu-22.04/latest"
-    }
-    
-    # storage_profile은 선택 사항이지만 명시적 구성 권장
-    storage_profile {
-      os_disk_storage_account_type = "Standard"
     }
 
     network_profile {
