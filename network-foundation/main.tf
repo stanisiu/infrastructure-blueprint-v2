@@ -449,7 +449,7 @@ resource "azurerm_firewall_application_rule_collection" "aks_required_app" {
 }
 
 # =====================================================
-# 9. Dev Center 및 Managed DevOps Pool (네이티브 마이그레이션 적용)
+# 9. Dev Center 및 Managed DevOps Pool (네이티브 최신 스키마)
 # =====================================================
 resource "azurerm_dev_center" "dc" {
   name                = "dc-core-network-v2"
@@ -476,38 +476,39 @@ resource "azurerm_role_assignment" "devops_vnet_contributor" {
   principal_id         = "6854130e-96f3-4483-867b-2a9d45dfac2e"
 }
 
-# IAM 전파 지연 방어를 위한 명시적 대기 로직
 resource "time_sleep" "wait_for_rbac_propagation" {
   depends_on      = [azurerm_role_assignment.devops_vnet_contributor]
   create_duration = "60s"
 }
 
-# 불안정한 azapi를 대체하는 안정적인 azurerm 네이티브 Managed DevOps Pool 리소스
+# 최신 v4.68+ 프로바이더 스키마에 맞춘 네이티브 리소스
 resource "azurerm_managed_devops_pool" "devops_pool" {
-  name                = "mdp-private-pool"
-  location            = local.safe_location
-  resource_group_name = data.azurerm_resource_group.vpn_rg.name
+  name                  = "mdp-private-pool"
+  location              = local.safe_location
+  resource_group_name   = data.azurerm_resource_group.vpn_rg.name
+  
+  dev_center_project_id = azurerm_dev_center_project.dcp.id
+  maximum_concurrency   = 1
 
-  dev_center_project_resource_id = azurerm_dev_center_project.dcp.id
-  maximum_concurrency            = 1
-
-  organization_profile {
-    organizations {
-      url      = var.ado_url
-      projects = []
-    }
-    permission_profile {
-      kind = "Inherited"
-    }
+  azure_devops_organization {
+    url = var.ado_url
+    
+    # 상속 권한 프로필 (projects를 비워두면 조직 전체/프로젝트 상속)
+    pool_projects_kind = "Inherited" 
   }
 
-  fabric_profile {
-    sku {
-      name = "Standard_B2s"
-    }
-    images {
+  virtual_machine_scale_set_fabric {
+    sku_name = "Standard_B2s"
+    
+    image {
       well_known_image_name = "ubuntu-22.04/latest"
     }
+    
+    # storage_profile은 선택 사항이지만 명시적 구성 권장
+    storage_profile {
+      os_disk_storage_account_type = "Standard"
+    }
+
     network_profile {
       subnet_id = azurerm_subnet.app_subnet.id
     }
