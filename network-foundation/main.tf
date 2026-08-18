@@ -449,7 +449,7 @@ resource "azurerm_firewall_application_rule_collection" "aks_required_app" {
 }
 
 # =====================================================
-# 9. Dev Center 및 Managed DevOps Pool (최종 스키마 정렬 완료)
+# 9. Dev Center 및 Managed DevOps Pool (최종 완성 스키마)
 # =====================================================
 resource "azurerm_dev_center" "dc" {
   name                = "dc-core-network-v2"
@@ -489,11 +489,13 @@ resource "azurerm_managed_devops_pool" "devops_pool" {
   dev_center_project_id = azurerm_dev_center_project.dcp.id
   maximum_concurrency   = 1
 
+  subnet_id             = azurerm_subnet.app_subnet.id
+
   azure_devops_organization {
     organization {
-      url          = var.ado_url
-      projects     = []
-      parallelism  = 1
+      url         = var.ado_url
+      projects    = []
+      parallelism = 1
     }
   }
 
@@ -502,10 +504,6 @@ resource "azurerm_managed_devops_pool" "devops_pool" {
     
     image {
       well_known_image_name = "ubuntu-22.04/latest"
-    }
-
-    network_profile {
-      subnet_id = azurerm_subnet.app_subnet.id
     }
   }
 
