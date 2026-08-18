@@ -449,7 +449,7 @@ resource "azurerm_firewall_application_rule_collection" "aks_required_app" {
 }
 
 # =====================================================
-# 9. Dev Center 및 Managed DevOps Pool (최신 정식 v4 스키마 반영)
+# 9. Dev Center 및 Managed DevOps Pool (최종 스키마 정렬 완료)
 # =====================================================
 resource "azurerm_dev_center" "dc" {
   name                = "dc-core-network-v2"
@@ -481,7 +481,6 @@ resource "time_sleep" "wait_for_rbac_propagation" {
   create_duration = "60s"
 }
 
-# 최신 프로바이더 스키마 검증을 완벽히 통과하는 Managed DevOps Pool 네이티브 리소스
 resource "azurerm_managed_devops_pool" "devops_pool" {
   name                  = "mdp-private-pool"
   location              = local.safe_location
@@ -492,7 +491,7 @@ resource "azurerm_managed_devops_pool" "devops_pool" {
 
   azure_devops_organization {
     organization {
-      uri          = var.ado_url
+      url          = var.ado_url
       projects     = []
       parallelism  = 1
     }
