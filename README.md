@@ -27,13 +27,110 @@ This project is declaratively managed via Terraform, provisioning 17 core infras
 
 ---
 
-## 🖼️ Core Infrastructure Verification Points
+## 🖼️ Core Infrastructure Verification & Evidence
 
-| Key Component | Description | Screenshot |
+This section demonstrates the actual deployment state and security configurations verified directly from the Azure Portal and Terraform CLI.
+
+### 1. Resource Group Inventory (`rg-enterprise-vpn-sec-v2`)
+Verification of 10 core infrastructure resources declaratively provisioned in `Japan East`:
+
+| Resource Name | Resource Type | Description |
 | :--- | :--- | :--- |
-| **1. Resource Group Inventory (`rg-enterprise-vpn-sec-v2`)** | Verification of 17 core resources (VNet, VPN Gateway, DNS Resolver, Log Analytics, etc.) declaratively provisioned via Terraform. | <img src="docs/images/rg-inventory.png" width="350" alt="Resource Group Inventory"> |
-| **2. Custom IPsec/IKE Security Policy (`conn-azure-to-onprem`)** | Application of `AES256`, `SHA256`, `DHGroup14`, and `PFS2048` across IKE Phase 1/2 for public transit encryption and Perfect Forward Secrecy (PFS). | <img src="docs/images/ipsec-policy.png" width="350" alt="IPsec Policy"> |
-| **3. Network Security Group Rules (`nsg-app-subnet`)** | Enforcement of least privilege via **Priority 100** (On-Prem SSH), **Priority 200** (Internal VNet), and **Priority 4096** (Default Deny All). | <img src="docs/images/nsg-rules.png" width="350" alt="NSG Rules"> |
+| `vnet-core-network` | Virtual Network | Core Hub VNet (`10.0.0.0/16`) hosting 4 isolated subnets |
+| `vng-core-vpn` | Virtual Network Gateway | High-availability VPN Gateway (`VpnGw1AZ` SKU) |
+| `lng-onprem-datacenter` | Local Network Gateway | On-premises router representation (`192.168.0.0/16`) |
+| `conn-azure-to-onprem` | Connection | Site-to-Site IPsec/IKE encrypted VPN connection |
+| `dnspr-core-network` | Private DNS Resolver | Hybrid DNS endpoint (`10.0.4.4`) for inbound forwarding |
+| `nsg-app-subnet` | Network Security Group | Least-privilege ACLs attached to `snet-applications` |
+| `law-vpn-diagnostics` | Log Analytics Workspace | Centralized diagnostic logging & telemetry hub |
+| `stvpnflowlogs...` | Storage Account | NSG Flow Logs storage with default public access disabled |
+
+<br>
+
+<details>
+<summary><b>🔍 View Resource Group Screenshot</b></summary>
+<br>
+
+<img src="./images/rg-overview.png" width="850" alt="Resource Group Overview">
+
+</details>
+
+---
+
+### 2. Infrastructure as Code (Terraform Provisioning & Outputs)
+Successful execution of Terraform (`Apply complete!`) returning core attributes for downstream Spoke VNet integration:
+
+<img src="./images/terraform-output.png" width="850" alt="Terraform Apply Output">
+
+* **Inbound DNS Resolver IP**: `10.0.4.4`
+* **VPN Gateway BGP Peer IP**: `10.0.254.30`
+* **Hub VNet Address Space**: `10.0.0.0/16`
+* **On-Premises Address Space**: `192.168.0.0/16`
+
+---
+
+### 3. IPsec/IKE Custom Encryption Policy (`conn-azure-to-onprem`)
+Strict custom IPsec/IKE policies enforced over IKEv2 to secure public internet transit:
+
+| Parameter | Configuration | Value |
+| :--- | :--- | :--- |
+| **IKE Phase 1** | Encryption / Integrity / DH Group | `AES256` / `SHA256` / `DHGroup14` |
+| **IKE Phase 2 (IPsec)** | Encryption / Integrity / PFS Group | `AES256` / `SHA256` / `PFS2048` |
+| **SA Lifetime & DPD** | SA Lifetime / DPD Timeout | `27000 sec` / `45 sec` |
+| **Routing & Protocol** | BGP Status / Protocol | `Enabled` / `IKEv2` |
+
+<br>
+
+<details>
+<summary><b>🔍 View Connection Policy Screenshot</b></summary>
+<br>
+
+<img src="./images/ipsec-policy.png" width="850" alt="IPsec Policy">
+
+</details>
+
+---
+
+### 4. Zero Trust Network Access Control (`nsg-app-subnet`)
+Strict inbound/outbound traffic filter rules applied to `snet-applications` (`10.0.1.0/24`):
+
+| Priority | Name | Port | Protocol | Source | Destination | Action | Purpose |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **100** | `Allow_SSH_From_OnPrem_Mgmt` | `22` | `TCP` | `192.168.1.0/24` | `Any` | **Allow** | Restricted SSH management from On-Prem |
+| **200** | `Allow_VNet_Internal` | `Any` | `Any` | `10.0.0.0/16` | `Any` | **Allow** | Internal VNet intra-communication |
+| **4096** | `Deny_All_Inbound` | `Any` | `Any` | `Any` | `Any` | **Deny** | Explicit Default Deny All |
+
+<br>
+
+<details>
+<summary><b>🔍 View NSG Rules Screenshot</b></summary>
+<br>
+
+<img src="./images/nsg-rules.png" width="850" alt="NSG Rules">
+
+</details>
+
+---
+
+### 5. Subnet Segregation & VNet Topology (`vnet-core-network`)
+Core VNet (`10.0.0.0/16`) divided into 4 purpose-driven subnets:
+
+* **`snet-applications`**: `10.0.1.0/24` (Bound to `nsg-app-subnet`)
+* **`snet-dns-resolver-inbound`**: `10.0.4.0/28` (Allocated for DNS Inbound Endpoint)
+* **`snet-aks-cluster`**: `10.0.8.0/22` (Reserved for AKS cluster)
+* **`GatewaySubnet`**: `10.0.254.0/27` (Dedicated for `vng-core-vpn`)
+
+<br>
+
+<details>
+<summary><b>🔍 View Topology & Subnet Screenshots</b></summary>
+<br>
+
+| VNet Topology | Subnet Details |
+| :---: | :---: |
+| <img src="./images/vnet-topology.png" width="400"> | <img src="./images/vnet-subnets.png" width="400"> |
+
+</details>
 
 ---
 
