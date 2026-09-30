@@ -1,109 +1,283 @@
-# 🌐 enterprise-vpn-sec-v2
-> **Enterprise Hybrid Cloud Network & Security Infrastructure**  
-> Automated deployment of a safe, scalable Zero Trust architecture between On-Premises and Azure using Terraform (IaC).
+# 🌐 Infrastructure Blueprint v2
+
+> **Azure Hybrid Cloud Network & Security Infrastructure**  
+> Terraform-based deployment of a hybrid Azure network architecture applying Zero Trust network security principles.
 
 ---
 
-## 📌 Project Summary
-* Built a high-availability hybrid cloud infrastructure connecting an on-premises data center with Microsoft Azure.
-* Established a Zero Trust security posture through strict network segregation and NSG-based least-privilege access controls.
-* Created a robust hub network foundation integrating Azure Private DNS Resolver to support seamless bidirectional name resolution across hybrid environments.
+## 📌 Project Overview
+
+This project demonstrates the design, deployment, and validation of a **hybrid Azure network infrastructure** connecting a simulated on-premises environment with Microsoft Azure.
+
+The infrastructure is declaratively managed using **Terraform** and focuses on hybrid connectivity, network segmentation, secure routing, DNS integration, observability, and infrastructure automation.
+
+### Key Objectives
+
+- Build a hybrid Azure network using Site-to-Site VPN connectivity
+- Implement dynamic routing using BGP
+- Apply network segmentation and least-privilege access controls
+- Configure custom IPsec/IKEv2 encryption policies
+- Integrate Azure Private DNS Resolver for hybrid name resolution
+- Manage infrastructure declaratively using Terraform
+- Centralize network diagnostics using Azure Log Analytics
+- Validate deployment and troubleshoot infrastructure failures
+
+> **Project Focus:** Azure Networking · Terraform IaC · Hybrid Connectivity · Network Security · DNS · Observability
 
 ---
 
-## 🏗️ Architecture Overview & Components
+# 🏗️ Architecture Overview
 
-This project is declaratively managed via Terraform, provisioning 10 core infrastructure resources within a central hub network (`10.0.0.0/16`):
+The infrastructure is built around a central Azure VNet:
 
-* **Core Network (`vnet-core-network`):** VNet (`10.0.0.0/16`) split into 4 purpose-driven subnets:
-  * `GatewaySubnet`: Dedicated subnet (`10.0.254.0/27`) for Virtual Network Gateway.
-  * `snet-applications`: Dedicated subnet (`10.0.1.0/24`) for core application workloads.
-  * `snet-aks-cluster`: Dedicated address range (`10.0.8.0/22`) reserved for future container cluster expansion.
-  * `snet-dns-resolver-inbound`: Dedicated range (`10.0.4.0/28`) exclusively allocated for Private DNS Resolver inbound endpoints.
-* **Hybrid Connectivity (`vng-core-vpn` & `lng-onprem-datacenter`):** Zone-redundant SKU (`VpnGw1AZ`) Virtual Network Gateway paired with Local Network Gateway and BGP dynamic routing.
-* **Security & Governance (`nsg-app-subnet`):** Hierarchical NSG inbound/outbound rules and public-access-blocked diagnostic Storage Accounts (`stvpnflowlogs...`).
-* **Hybrid DNS (`dnspr-core-network`):** Inbound endpoint (`10.0.4.4`) enabling conditional forwarding and bidirectional FQDN resolution.
-* **Observability (`law-vpn-diagnostics`):** Integrated Log Analytics Workspace collecting network flow logs and diagnostic telemetry.
+```text
+vnet-core-network
+10.0.0.0/16
+```
+
+The VNet is divided into dedicated subnets for gateway, application, DNS, and future container workloads.
+
+```text
+                 Simulated On-Premises
+                   192.168.0.0/16
+                          │
+                          │
+                    IPsec / IKEv2
+                          │
+                          │ BGP
+                          ▼
+               Azure VPN Gateway
+                  (VpnGw1AZ)
+                          │
+                          ▼
+              vnet-core-network
+                 10.0.0.0/16
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ▼               ▼               ▼
+   Applications       DNS Resolver      AKS Reserved
+   10.0.1.0/24        10.0.4.0/28      10.0.8.0/22
+          │               │
+          ▼               ▼
+         NSG        Private DNS Resolver
+                       10.0.4.4
+```
 
 ---
 
-## 🖼️ Core Infrastructure Verification & Evidence
+# ☁️ Core Infrastructure Components
 
-This section demonstrates the actual deployment state and security configurations verified directly from the Azure Portal and Terraform CLI.
+The infrastructure is managed through Terraform and includes the following core components.
 
-### 1. Resource Group Inventory (`rg-enterprise-vpn-sec-v2`)
-Verification of 10 core infrastructure resources declaratively provisioned in `Japan East`:
+### Core Network
+
+**`vnet-core-network`**
+
+Address space:
+
+```text
+10.0.0.0/16
+```
+
+The VNet is divided into four purpose-driven subnets:
+
+| Subnet | Address Range | Purpose |
+|---|---|---|
+| `GatewaySubnet` | `10.0.254.0/27` | Azure VPN Gateway |
+| `snet-applications` | `10.0.1.0/24` | Application workloads |
+| `snet-dns-resolver-inbound` | `10.0.4.0/28` | Private DNS Resolver inbound endpoint |
+| `snet-aks-cluster` | `10.0.8.0/22` | Reserved for future AKS workloads |
+
+---
+
+## Hybrid Connectivity
+
+Hybrid connectivity is implemented using:
+
+- Azure Virtual Network Gateway
+- Local Network Gateway
+- Site-to-Site VPN
+- IPsec/IKEv2
+- BGP dynamic routing
+
+The Azure VPN Gateway uses the `VpnGw1AZ` SKU to provide zone-redundant gateway capability.
+
+The Local Network Gateway represents the simulated on-premises network:
+
+```text
+192.168.0.0/16
+```
+
+> **Scope:** The on-premises side is simulated through Azure Local Network Gateway configuration. Physical firewall/router integration is not part of the current implementation.
+
+---
+
+## Network Security
+
+Network security controls are implemented through:
+
+- Network Security Groups
+- Subnet-level segmentation
+- Least-privilege inbound rules
+- Explicit deny rules
+- Restricted public access
+- Private network communication
+
+These controls apply **Zero Trust network security principles** by limiting network paths and explicitly defining permitted communication.
+
+---
+
+## Hybrid DNS
+
+Azure Private DNS Resolver provides inbound DNS resolution for the hybrid network.
+
+Inbound endpoint:
+
+```text
+10.0.4.4
+```
+
+The DNS architecture is designed to support conditional forwarding and hybrid name resolution between Azure and the simulated on-premises environment.
+
+---
+
+## Observability
+
+Azure Log Analytics Workspace is integrated to collect infrastructure diagnostics and network telemetry.
+
+The environment uses:
+
+- Azure Log Analytics
+- VPN diagnostic logs
+- Network telemetry
+- Infrastructure troubleshooting data
+
+These logs were also used during IPsec/IKE troubleshooting to identify tunnel negotiation failures.
+
+---
+
+# 🖼️ Infrastructure Verification & Evidence
+
+This section documents the actual deployment state and configurations verified through the Azure Portal and Terraform CLI.
+
+## 1. Resource Group Inventory
+
+Resource Group:
+
+```text
+rg-enterprise-vpn-sec-v2
+```
+
+Core infrastructure resources were provisioned in **Japan East**.
 
 | Resource Name | Resource Type | Description |
-| :--- | :--- | :--- |
-| `vnet-core-network` | Virtual Network | Core Hub VNet (`10.0.0.0/16`) hosting 4 isolated subnets |
-| `vng-core-vpn` | Virtual Network Gateway | High-availability VPN Gateway (`VpnGw1AZ` SKU) |
-| `lng-onprem-datacenter` | Local Network Gateway | On-premises router representation (`192.168.0.0/16`) |
-| `conn-azure-to-onprem` | Connection | Site-to-Site IPsec/IKE encrypted VPN connection |
-| `dnspr-core-network` | Private DNS Resolver | Hybrid DNS endpoint (`10.0.4.4`) for inbound forwarding |
-| `nsg-app-subnet` | Network Security Group | Least-privilege ACLs attached to `snet-applications` |
-| `law-vpn-diagnostics` | Log Analytics Workspace | Centralized diagnostic logging & telemetry hub |
-| `stvpnflowlogs...` | Storage Account | NSG Flow Logs storage with default public access disabled |
-
-<br>
+|---|---|---|
+| `vnet-core-network` | Virtual Network | Core Hub VNet (`10.0.0.0/16`) |
+| `vng-core-vpn` | Virtual Network Gateway | VPN Gateway using `VpnGw1AZ` |
+| `lng-onprem-datacenter` | Local Network Gateway | Simulated on-premises network (`192.168.0.0/16`) |
+| `conn-azure-to-onprem` | VPN Connection | Site-to-Site IPsec/IKE connection |
+| `dnspr-core-network` | Private DNS Resolver | Hybrid DNS resolver |
+| `nsg-app-subnet` | Network Security Group | Application subnet access controls |
+| `law-vpn-diagnostics` | Log Analytics Workspace | Centralized diagnostic logging |
+| `stvpnflowlogs...` | Storage Account | Diagnostic storage with restricted public access |
 
 <details>
 <summary><b>🔍 View Resource Group Screenshot</b></summary>
+
 <br>
 
-<img src="./images/스크린샷 2026-08-19 104202.png" width="850" alt="Resource Group Overview">
+<img src="./images/스크린샷 2026-08-19 104202.png" width="850" alt="Azure Resource Group Overview">
 
 </details>
 
 ---
 
-### 2. Infrastructure as Code (Terraform Provisioning & Outputs)
-Successful execution of Terraform (`Apply complete!`) returning core attributes for downstream Spoke VNet integration:
+# 🧱 Infrastructure as Code
+
+The infrastructure lifecycle is managed using **Terraform** with the AzureRM provider.
+
+Terraform is used to provision and manage:
+
+- Virtual Network
+- Subnets
+- Virtual Network Gateway
+- Local Network Gateway
+- Site-to-Site VPN Connection
+- Network Security Group
+- Private DNS Resolver
+- Log Analytics Workspace
+- Diagnostic Storage
+
+## Terraform Deployment Evidence
+
+Successful Terraform deployment:
 
 <img src="./images/스크린샷 2026-08-19 104351.png" width="850" alt="Terraform Apply Output">
 
-* **Inbound DNS Resolver IP**: `10.0.4.4`
-* **VPN Gateway BGP Peer IP**: `10.0.254.30`
-* **Hub VNet Address Space**: `10.0.0.0/16`
-* **On-Premises Address Space**: `192.168.0.0/16`
+Key Terraform outputs include:
+
+```text
+Inbound DNS Resolver IP : 10.0.4.4
+VPN Gateway BGP Peer IP : 10.0.254.30
+Hub VNet Address Space  : 10.0.0.0/16
+On-Premises Network     : 192.168.0.0/16
+```
+
+Terraform outputs expose infrastructure attributes that can be reused by downstream network components and future Spoke integrations.
 
 ---
 
-### 3. IPsec/IKE Custom Encryption Policy (`conn-azure-to-onprem`)
-Strict custom IPsec/IKE policies enforced over IKEv2 to secure public internet transit:
+# 🔐 IPsec / IKEv2 Configuration
 
-| Parameter | Configuration | Value |
-| :--- | :--- | :--- |
-| **IKE Phase 1** | Encryption / Integrity / DH Group | `AES256` / `SHA256` / `DHGroup14` |
-| **IKE Phase 2 (IPsec)** | Encryption / Integrity / PFS Group | `AES256` / `SHA256` / `PFS2048` |
-| **SA Lifetime & DPD** | SA Lifetime / DPD Timeout | `27000 sec` / `45 sec` |
-| **Routing & Protocol** | BGP Status / Protocol | `Enabled` / `IKEv2` |
+A custom IPsec/IKE policy was configured for the Site-to-Site VPN connection.
 
-<br>
+| Phase | Parameter | Value |
+|---|---|---|
+| IKE Phase 1 | Encryption | `AES256` |
+| IKE Phase 1 | Integrity | `SHA256` |
+| IKE Phase 1 | DH Group | `DHGroup14` |
+| IPsec Phase 2 | Encryption | `AES256` |
+| IPsec Phase 2 | Integrity | `SHA256` |
+| IPsec Phase 2 | PFS Group | `PFS2048` |
+| SA | Lifetime | `27000 sec` |
+| DPD | Timeout | `45 sec` |
+| Routing | BGP | `Enabled` |
+| Protocol | VPN | `IKEv2` |
 
 <details>
 <summary><b>🔍 View Connection Policy Screenshot</b></summary>
+
 <br>
 
-<img src="./images/스크린샷 2026-08-19 105827.png" width="850" alt="IPsec Policy">
+<img src="./images/스크린샷 2026-08-19 105827.png" width="850" alt="IPsec IKE Policy">
 
 </details>
 
 ---
 
-### 4. Zero Trust Network Access Control (`nsg-app-subnet`)
-Strict inbound/outbound traffic filter rules applied to `snet-applications` (`10.0.1.0/24`):
+# 🛡️ Network Access Control
 
-| Priority | Name | Port | Protocol | Source | Destination | Action | Purpose |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **100** | `Allow_SSH_From_OnPrem_Mgmt` | `22` | `TCP` | `192.168.1.0/24` | `Any` | **Allow** | Restricted SSH management from On-Prem |
-| **200** | `Allow_VNet_Internal` | `Any` | `Any` | `10.0.0.0/16` | `Any` | **Allow** | Internal VNet intra-communication |
-| **4096** | `Deny_All_Inbound` | `Any` | `Any` | `Any` | `Any` | **Deny** | Explicit Default Deny All |
+Network Security Group rules were applied to the application subnet:
 
-<br>
+```text
+snet-applications
+10.0.1.0/24
+```
+
+The rules follow least-privilege network access principles.
+
+| Priority | Rule | Port | Protocol | Source | Destination | Action |
+|---:|---|---:|---|---|---|---|
+| 100 | `Allow_SSH_From_OnPrem_Mgmt` | 22 | TCP | `192.168.1.0/24` | Any | Allow |
+| 200 | `Allow_VNet_Internal` | Any | Any | `10.0.0.0/16` | Any | Allow |
+| 4096 | `Deny_All_Inbound` | Any | Any | Any | Any | Deny |
+
+This configuration restricts administrative SSH access to the designated management network while explicitly denying unmatched inbound traffic.
 
 <details>
 <summary><b>🔍 View NSG Rules Screenshot</b></summary>
+
 <br>
 
 <img src="./images/스크린샷 2026-08-19 105014.png" width="850" alt="NSG Rules">
@@ -112,97 +286,296 @@ Strict inbound/outbound traffic filter rules applied to `snet-applications` (`10
 
 ---
 
-### 5. Subnet Segregation & VNet Topology (`vnet-core-network`)
-Core VNet (`10.0.0.0/16`) divided into 4 purpose-driven subnets:
+# 🌐 Network Segmentation
 
-* **`snet-applications`**: `10.0.1.0/24` (Bound to `nsg-app-subnet`)
-* **`snet-dns-resolver-inbound`**: `10.0.4.0/28` (Allocated for DNS Inbound Endpoint)
-* **`snet-aks-cluster`**: `10.0.8.0/22` (Reserved for AKS cluster)
-* **`GatewaySubnet`**: `10.0.254.0/27` (Dedicated for `vng-core-vpn`)
+The core VNet uses dedicated subnets to separate infrastructure responsibilities.
 
-<br>
+| Subnet | CIDR | Role |
+|---|---|---|
+| `snet-applications` | `10.0.1.0/24` | Application workloads |
+| `snet-dns-resolver-inbound` | `10.0.4.0/28` | DNS Resolver inbound endpoint |
+| `snet-aks-cluster` | `10.0.8.0/22` | Reserved AKS address space |
+| `GatewaySubnet` | `10.0.254.0/27` | VPN Gateway |
 
 <details>
-<summary><b>🔍 View Topology & Subnet Screenshots</b></summary>
+<summary><b>🔍 View Network Topology</b></summary>
+
 <br>
 
 | VNet Topology | Subnet Details |
-| :---: | :---: |
+|---|---|
 | <img src="./images/스크린샷 2026-08-19 110043.png" width="400"> | <img src="./images/스크린샷 2026-08-19 104554.png" width="400"> |
 
 </details>
 
 ---
 
-## 🚀 Key Implementation Features
+# 🚀 Key Engineering Features
 
-### 1. Design Phase
-* **Enterprise Hybrid Network Topology:** Designed core VNet address space allocation and subnet segregation strategies.
-* **Zero Trust Architecture:** Established least-privilege access policies via NSGs and public-access-restricted storage design.
-* **IaC Standardization & Scalability:** Designed `outputs.tf` exposing VNet ID, Subnet IDs, and DNS Resolver IP for Spoke module integration via `terraform_remote_state`.
-* **Hybrid Routing & DNS Strategy:** Defined BGP-based dynamic routing protocols and Private DNS Resolver conditional forwarding architecture.
+## 1. Hybrid Network Design
 
-### 2. Implementation Phase
-* **Automated Provisioning with Terraform:** Managed full infrastructure lifecycle (create, update, destroy) using AzureRM Provider v5.1.0.
-* **Zone-Redundant VPN Tunnel:** Integrated `VpnGw1AZ` gateway and Local Network Gateway with strict custom encryption policies.
-* **Network Security & Hardening:** Enforced explicit deny rules on application subnets and set storage account default network access to `Deny`.
-* **Bidirectional FQDN Name Resolution:** Assigned dedicated IP (`10.0.4.4`) in `snet-dns-resolver-inbound` for Azure–on-premises conditional DNS forwarding.
+Designed the Azure VNet address space and subnet segmentation strategy for gateway, application, DNS, and future container workloads.
 
----
+## 2. Terraform Infrastructure Automation
 
-## 🚨 Troubleshooting & Issue Resolution
+Infrastructure resources are declaratively managed using Terraform.
 
-### ① Cloud Subscription Quota & SKU Restriction (`SkuNotAvailable`)
-* **Issue:** `SkuNotAvailable` error occurred during `terraform apply` when deploying `VpnGw1AZ` for zone-redundant high availability.
-* **Root Cause:** Exceeded regional subscription limits for public IPs and specific gateway SKUs.
-* **Resolution / Workaround:** Temporarily defaulted to standard SKU (`VpnGw1`) to validate core network topology first. Parameterized the SKU in `variables.tf` to allow seamless production upgrades while minimizing technical debt.
+The configuration supports repeatable:
 
-### ② IPsec Tunnel IKE Negotiation Failure (`Phase 1 Negotiation Failure`)
-* **Issue:** Connection status remained disconnected with packet drops after VPN Gateway deployment.
-* **Root Cause:** Mismatch in DH Group and integrity hash algorithms between Azure default settings and the simulated on-premises router.
-* **Resolution:** Analyzed IKE diagnostic logs in Log Analytics Workspace to pinpoint failure locations. Configured explicit custom IPsec policies (`AES256`, `SHA256`, `DHGroup14`, `PFS2048`) on both ends to successfully establish the tunnel.
-
-### ③ Terraform Implicit Dependency Deadlock
-* **Issue:** DNS Resolver inbound endpoint attempted deployment before subnet creation was complete, leading to deployment failure.
-* **Root Cause:** Parallel execution engine attempted simultaneous resource provisioning without explicit dependency tracking.
-* **Resolution:** Enforced explicit attribute references (`azurerm_subnet.snet_dns_resolver_inbound.id`) and added `depends_on` blocks where sequential provisioning was mandatory.
-
----
-
-## 🚧 Unimplemented Features & Roadmap
-
-* **Physical On-Premises Firewall Integration:** Currently simulated via `Local Network Gateway`. Future work includes physical hardware integration (e.g., Cisco/Fortinet) and Active-Active redundant routing testing.
-* **Multi-Region Spoke Network Expansion:** Currently centered around a single Hub. Future plans involve automated peering with multiple Spoke VNets and integration with Azure Virtual WAN.
-* **GitOps CI/CD Pipeline Construction:** Currently executed via local CLI. Future plans include GitHub Actions integration for automated PR `terraform plan` and main branch `apply` workflows.
-
----
-
-## 🧰 Tech Stack
-* **Cloud Platform:** Microsoft Azure (VNet, VPN Gateway, Private DNS Resolver, Log Analytics, NSG, Storage Account)
-* **IaC (Infrastructure as Code):** Terraform (HCL, AzureRM Provider v5.1.0)
-* **Protocols & Security:** IPsec/IKEv2, BGP, Zero Trust Architecture
-
----
-
-## 📂 Repository Structure
 ```text
-enterprise-vpn-sec-v2/
-├── modules/           # Network, VPN, DNS, and Security Group modules
-├── main.tf            # Root infrastructure configuration
-├── variables.tf       # Input variables definition
-├── outputs.tf         # Output variables for downstream Spoke integration
-└── README.md          # Project documentation
+Create → Modify → Validate → Destroy
+```
 
-# 1. Clone the repository
-git clone [https://github.com/your-username/enterprise-vpn-sec-v2.git](https://github.com/your-username/enterprise-vpn-sec-v2.git)
-cd enterprise-vpn-sec-v2
+infrastructure lifecycle operations.
 
-# 2. Initialize Terraform
-terraform init
+## 3. Hybrid Routing
 
-# 3. Preview execution plan
+BGP was enabled to support dynamic route exchange between Azure and the simulated on-premises network.
+
+## 4. Network Security
+
+Zero Trust network security principles were applied through:
+
+- Subnet segmentation
+- NSG-based least-privilege access
+- Explicit inbound deny rules
+- Restricted public access
+- Controlled administrative access
+
+## 5. Hybrid DNS
+
+Azure Private DNS Resolver was integrated to support hybrid DNS forwarding architecture.
+
+## 6. Infrastructure Observability
+
+Log Analytics was integrated to support VPN diagnostics, network telemetry, and troubleshooting.
+
+---
+
+# 🚨 Troubleshooting & Issue Resolution
+
+## 1. VPN Gateway SKU Availability
+
+### Issue
+
+Terraform returned:
+
+```text
+SkuNotAvailable
+```
+
+while attempting to deploy the `VpnGw1AZ` gateway.
+
+### Root Cause
+
+Regional subscription limitations affected availability of the requested Public IP and VPN Gateway resources.
+
+### Resolution
+
+A standard `VpnGw1` configuration was temporarily used to validate the network topology.
+
+The VPN Gateway SKU was parameterized through Terraform variables so the configuration could be changed without restructuring the infrastructure code.
+
+---
+
+## 2. IPsec/IKE Negotiation Failure
+
+### Issue
+
+The VPN connection remained disconnected after deployment.
+
+### Root Cause
+
+The IKE/IPsec parameters between Azure and the simulated on-premises endpoint were not aligned.
+
+### Resolution
+
+VPN diagnostic logs were analyzed through Log Analytics.
+
+Explicit encryption parameters were configured:
+
+```text
+AES256
+SHA256
+DHGroup14
+PFS2048
+IKEv2
+```
+
+After aligning the VPN parameters, the tunnel configuration was successfully validated.
+
+---
+
+## 3. Terraform Resource Dependency
+
+### Issue
+
+The Private DNS Resolver inbound endpoint attempted deployment before its required subnet configuration was available.
+
+### Root Cause
+
+Terraform attempted parallel resource provisioning where deployment ordering was required.
+
+### Resolution
+
+Explicit resource references were used:
+
+```hcl
+azurerm_subnet.snet_dns_resolver_inbound.id
+```
+
+and `depends_on` was added where explicit sequential provisioning was required.
+
+This ensured the DNS Resolver endpoint was created only after its required network resources were available.
+
+---
+
+# 🚧 Current Limitations & Roadmap
+
+The project intentionally separates implemented functionality from future improvements.
+
+### Physical On-Premises Integration
+
+**Current:** Simulated using Azure Local Network Gateway.
+
+**Future:** Integrate physical network equipment such as Cisco or Fortinet and validate redundant routing behavior.
+
+### Multi-Spoke Network Architecture
+
+**Current:** Infrastructure is centered around a single core Hub VNet.
+
+**Future:** Add multiple Spoke VNets, automated VNet peering, and evaluate Azure Virtual WAN integration.
+
+### CI/CD for Terraform
+
+**Current:** Terraform deployment is executed through the local CLI.
+
+**Future:** Integrate GitHub Actions to automatically execute:
+
+```text
+Pull Request
+     │
+     ▼
 terraform plan
-
-# 4. Provision infrastructure
+     │
+     ▼
+Review / Approval
+     │
+     ▼
+Main Branch
+     │
+     ▼
 terraform apply
-*
+```
+
+---
+
+# 🧰 Tech Stack
+
+| Category | Technologies |
+|---|---|
+| Cloud Platform | Microsoft Azure |
+| Networking | VNet, Subnets, VPN Gateway, Local Network Gateway |
+| Hybrid Connectivity | Site-to-Site VPN, IPsec/IKEv2, BGP |
+| DNS | Azure Private DNS Resolver |
+| Security | NSG, Network Segmentation, Least-Privilege Access |
+| Observability | Azure Log Analytics |
+| Infrastructure as Code | Terraform, HCL, AzureRM Provider |
+| Infrastructure Design | Hub Network, Zero-Trust-Oriented Network Architecture |
+
+---
+
+# 📂 Repository Structure
+
+```text
+infrastructure-blueprint-v2/
+├── .github/
+│   └── workflows/
+├── azure-pipelines/
+├── compute-ask/
+├── images/
+├── manifests/
+├── network-foundation/
+└── README.md
+```
+
+### Core Directories
+
+- **`network-foundation/`** — Terraform configuration for the core Azure network infrastructure
+- **`images/`** — Azure Portal and Terraform deployment evidence
+- **`manifests/`** — Infrastructure-related configuration manifests
+- **`compute-ask/`** — Compute/AKS-related project resources
+- **`.github/workflows/`** — Workflow-related configuration
+- **`azure-pipelines/`** — Pipeline-related project files
+
+> Some repository directories represent supporting or experimental work. The validated core infrastructure described in this README is centered around the Terraform network foundation.
+
+---
+
+# 🚀 Deployment
+
+## 1. Clone Repository
+
+```bash
+git clone https://github.com/stanisiu/infrastructure-blueprint-v2.git
+cd infrastructure-blueprint-v2
+```
+
+## 2. Move to the Terraform Network Configuration
+
+```bash
+cd network-foundation
+```
+
+## 3. Initialize Terraform
+
+```bash
+terraform init
+```
+
+## 4. Review Infrastructure Changes
+
+```bash
+terraform plan
+```
+
+## 5. Deploy Infrastructure
+
+```bash
+terraform apply
+```
+
+> Azure authentication and the required Terraform/Azure CLI environment must be configured before deployment.
+
+---
+
+# 🎯 Project Outcomes
+
+Through this project, the following infrastructure capabilities were implemented and validated:
+
+- Terraform-based Azure infrastructure provisioning
+- VNet and subnet segmentation
+- Site-to-Site VPN architecture
+- IPsec/IKEv2 security configuration
+- BGP dynamic routing
+- Zone-redundant VPN Gateway capability
+- NSG-based least-privilege access controls
+- Private DNS Resolver integration
+- Hybrid DNS architecture
+- Log Analytics-based diagnostics
+- Terraform dependency management
+- VPN and infrastructure troubleshooting
+
+The project demonstrates practical experience integrating **Azure networking, Terraform infrastructure automation, hybrid connectivity, network security, DNS, and infrastructure troubleshooting**.
+
+---
+
+# 📌 Project Scope
+
+This project is a controlled infrastructure lab focused on **Azure hybrid networking and network security architecture**.
+
+The core engineering flow is:
+
+**Terraform IaC → Network Segmentation → VPN Connectivity → IPsec/IKEv2 → BGP Routing → Network Security → Hybrid DNS → Observability → Troubleshooting**
+
+The on-premises environment is currently simulated rather than connected to physical network hardware, and CI/CD-based Terraform deployment remains part of the future roadmap.
