@@ -29,11 +29,11 @@ This project is declaratively managed via Terraform, provisioning 17 core infras
 
 ## 🖼️ Core Infrastructure Verification Points
 
-| Key Component | Description |
-| :--- | :--- |
-| **1. Resource Group Inventory (`rg-enterprise-vpn-sec-v2`)** | Verification of 17 core resources (VNet, VPN Gateway, DNS Resolver, Log Analytics, etc.) declaratively provisioned via Terraform. |
-| **2. Custom IPsec/IKE Security Policy (`conn-azure-to-onprem`)** | Application of `AES256`, `SHA256`, `DHGroup14`, and `PFS2048` across IKE Phase 1/2 for public transit encryption and Perfect Forward Secrecy (PFS). |
-| **3. Network Security Group Rules (`nsg-app-subnet`)** | Enforcement of least privilege via **Priority 100** (On-Prem SSH), **Priority 200** (Internal VNet), and **Priority 4096** (Default Deny All). |
+| Key Component | Description | Screenshot |
+| :--- | :--- | :--- |
+| **1. Resource Group Inventory (`rg-enterprise-vpn-sec-v2`)** | Verification of 17 core resources (VNet, VPN Gateway, DNS Resolver, Log Analytics, etc.) declaratively provisioned via Terraform. | <img src="docs/images/rg-inventory.png" width="350" alt="Resource Group Inventory"> |
+| **2. Custom IPsec/IKE Security Policy (`conn-azure-to-onprem`)** | Application of `AES256`, `SHA256`, `DHGroup14`, and `PFS2048` across IKE Phase 1/2 for public transit encryption and Perfect Forward Secrecy (PFS). | <img src="docs/images/ipsec-policy.png" width="350" alt="IPsec Policy"> |
+| **3. Network Security Group Rules (`nsg-app-subnet`)** | Enforcement of least privilege via **Priority 100** (On-Prem SSH), **Priority 200** (Internal VNet), and **Priority 4096** (Default Deny All). | <img src="docs/images/nsg-rules.png" width="350" alt="NSG Rules"> |
 
 ---
 
