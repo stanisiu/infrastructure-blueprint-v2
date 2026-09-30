@@ -13,16 +13,16 @@
 
 ## 🏗️ Architecture Overview & Components
 
-This project is declaratively managed via Terraform, provisioning 17 core infrastructure resources within a central hub network (`10.0.0.0/16`):
+This project is declaratively managed via Terraform, provisioning 10 core infrastructure resources within a central hub network (`10.0.0.0/16`):
 
-* **Core Network (`vnet-hub-prod`):** VNet (`10.0.0.0/16`) split into 4 purpose-driven subnets:
-  * `GatewaySubnet`: Dedicated subnet for Virtual Network Gateway.
-  * `snet-applications`: Dedicated subnet for core application workloads.
-  * `snet-aks-cluster`: Dedicated address range reserved for future container cluster expansion.
-  * `snet-dns-resolver-inbound`: Exclusively allocated for Private DNS Resolver inbound endpoints.
-* **Hybrid Connectivity (`vpngw-hub-prod` & `lng-onprem`):** Zone-redundant SKU (`VpnGw1AZ`) Virtual Network Gateway paired with Local Network Gateway and BGP dynamic routing.
-* **Security & Governance (`nsg-app-subnet`):** Hierarchical NSG inbound/outbound rules and public-access-blocked diagnostic Storage Accounts.
-* **Hybrid DNS (`dns-resolver-hub`):** Inbound endpoint (`10.0.4.4`) enabling conditional forwarding and bidirectional FQDN resolution.
+* **Core Network (`vnet-core-network`):** VNet (`10.0.0.0/16`) split into 4 purpose-driven subnets:
+  * `GatewaySubnet`: Dedicated subnet (`10.0.254.0/27`) for Virtual Network Gateway.
+  * `snet-applications`: Dedicated subnet (`10.0.1.0/24`) for core application workloads.
+  * `snet-aks-cluster`: Dedicated address range (`10.0.8.0/22`) reserved for future container cluster expansion.
+  * `snet-dns-resolver-inbound`: Dedicated range (`10.0.4.0/28`) exclusively allocated for Private DNS Resolver inbound endpoints.
+* **Hybrid Connectivity (`vng-core-vpn` & `lng-onprem-datacenter`):** Zone-redundant SKU (`VpnGw1AZ`) Virtual Network Gateway paired with Local Network Gateway and BGP dynamic routing.
+* **Security & Governance (`nsg-app-subnet`):** Hierarchical NSG inbound/outbound rules and public-access-blocked diagnostic Storage Accounts (`stvpnflowlogs...`).
+* **Hybrid DNS (`dnspr-core-network`):** Inbound endpoint (`10.0.4.4`) enabling conditional forwarding and bidirectional FQDN resolution.
 * **Observability (`law-vpn-diagnostics`):** Integrated Log Analytics Workspace collecting network flow logs and diagnostic telemetry.
 
 ---
@@ -51,7 +51,7 @@ Verification of 10 core infrastructure resources declaratively provisioned in `J
 <summary><b>🔍 View Resource Group Screenshot</b></summary>
 <br>
 
-<img src="./images/rg-overview.png" width="850" alt="Resource Group Overview">
+<img src="./images/스크린샷 2026-08-19 104202.png" width="850" alt="Resource Group Overview">
 
 </details>
 
@@ -60,7 +60,7 @@ Verification of 10 core infrastructure resources declaratively provisioned in `J
 ### 2. Infrastructure as Code (Terraform Provisioning & Outputs)
 Successful execution of Terraform (`Apply complete!`) returning core attributes for downstream Spoke VNet integration:
 
-<img src="./images/terraform-output.png" width="850" alt="Terraform Apply Output">
+<img src="./images/스크린샷 2026-08-19 104351.png" width="850" alt="Terraform Apply Output">
 
 * **Inbound DNS Resolver IP**: `10.0.4.4`
 * **VPN Gateway BGP Peer IP**: `10.0.254.30`
@@ -85,7 +85,7 @@ Strict custom IPsec/IKE policies enforced over IKEv2 to secure public internet t
 <summary><b>🔍 View Connection Policy Screenshot</b></summary>
 <br>
 
-<img src="./images/ipsec-policy.png" width="850" alt="IPsec Policy">
+<img src="./images/스크린샷 2026-08-19 105827.png" width="850" alt="IPsec Policy">
 
 </details>
 
@@ -106,7 +106,7 @@ Strict inbound/outbound traffic filter rules applied to `snet-applications` (`10
 <summary><b>🔍 View NSG Rules Screenshot</b></summary>
 <br>
 
-<img src="./images/nsg-rules.png" width="850" alt="NSG Rules">
+<img src="./images/스크린샷 2026-08-19 105014.png" width="850" alt="NSG Rules">
 
 </details>
 
@@ -128,7 +128,7 @@ Core VNet (`10.0.0.0/16`) divided into 4 purpose-driven subnets:
 
 | VNet Topology | Subnet Details |
 | :---: | :---: |
-| <img src="./images/vnet-topology.png" width="400"> | <img src="./images/vnet-subnets.png" width="400"> |
+| <img src="./images/스크린샷 2026-08-19 110043.png" width="400"> | <img src="./images/스크린샷 2026-08-19 104554.png" width="400"> |
 
 </details>
 
@@ -184,7 +184,6 @@ Core VNet (`10.0.0.0/16`) divided into 4 purpose-driven subnets:
 
 ---
 
-❗We no longer provide this feature.
 ## 📂 Repository Structure
 ```text
 enterprise-vpn-sec-v2/
